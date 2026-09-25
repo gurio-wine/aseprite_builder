@@ -55,7 +55,9 @@ jobs:
       run: |
         set -euo pipefail
         TAG="${{ steps.version_info.outputs.latest_tag }}"
-        release_json=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" 2>/dev/null || true)
+
+        releases=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100")
+        release_json=$(echo "$releases" | jq -c --arg tag "$TAG" 'map(select(.tag_name == $tag)) | .[0] // empty')
 
         if [[ -z "$release_json" ]]; then
           echo "No release exists for $TAG; creating a draft release."
@@ -73,9 +75,10 @@ jobs:
 
         RELEASE_ID=$(echo "$release_json" | jq -r '.id')
         if [[ -z "$RELEASE_ID" || "$RELEASE_ID" == "null" ]]; then
-          echo "Failed to obtain the GitHub release ID."
+          echo "Failed to obtain the GitHub release ID for $TAG."
           exit 1
         fi
+        echo "Using release ID: $RELEASE_ID"
         echo "$release_json" > release.json
 
     - name: Determine whether to build
